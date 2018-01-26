@@ -229,61 +229,70 @@ if args.analysis_level == "group":
 # otherwise we move on to conforming the data configuration
 if not args.data_config_file:
 
-    from bids_utils import collect_bids_files_configs, bids_gen_cpac_sublist
+    # from bids_utils import collect_bids_files_configs, bids_gen_cpac_sublist
+    layout = BIDSLayout(args.bids_dir)
+    data_config = {
+                    dataFormat: ['BIDS'],
+                    bidsBaseDir: args.bids_dir,
+                    outputSubjectListLocation: args.output_dir,
+                    subjectListName: ['bids_sublist'],
+                  }
+    if args.aws_input_creds:
+        data_config.update({'awsCredentialsFile': args.aws_input_creds})
 
-    (file_paths, config) = collect_bids_files_configs(args.bids_dir, args.aws_input_creds)
-
+    # (file_paths, config) = collect_bids_files_configs(args.bids_dir, args.aws_input_creds)
+    subjects_bids = set(layout.get_subjects())
     if args.participant_label:
+        subjects_selected = set([sub.lstrip('sub-') for sub in args.participant_label])
+        subjects_torun = subjects_bids.intersect(subjects_selected)
+        subjects_missing = subjects_selected - subjects_torun
+        if subjects_missing:
+            print('participant_label has subjects not in the bids directory: {}'.format(subjects_missing))
 
-        pt_file_paths = []
-        for pt in args.participant_label:
+        subjects = ['sub-'+sub for sub in list(subjects_torun)]
+        # for pt in args.participant_label:
+        #
+        #     if 'sub-' not in pt:
+        #         pt = 'sub-' + pt
+        #
+        #     pt_file_paths += [fp for fp in file_paths if pt in fp]
+        #
+        # file_paths = pt_file_paths
+    else:
+        subjects = ['sub-'+sub for sub in subjects_bids]
 
-            if 'sub-' not in pt:
-                pt = 'sub-' + pt
-
-            pt_file_paths += [fp for fp in file_paths if pt in fp]
-
-        file_paths = pt_file_paths
-
-    if not file_paths:
-        print ("Did not find any files to process")
+    if not subjects:
+        print("Did not find any files to process")
         sys.exit(1)
 
-    # TODO: once CPAC is updated to use per-scan parameters from subject list,
-    # change the 3rd arguement to the config dict returned from
-    # collect_bids_files_configs
-    sub_list = bids_gen_cpac_sublist(args.bids_dir, file_paths, [], args.aws_input_creds)
-
-    if not sub_list:
-        print("Did not find data in {0}".format(args.bids_dir))
-        sys.exit(1)
-
+    data_config.update({'subjectList': subjects})
 else:
     # load the file as a check to make sure it is available and readable
-    sub_list = yaml.load(open(os.path.realpath(args.data_config_file), 'r'))
+    data_config = yaml.load(open(os.path.realpath(args.data_config_file), 'r'))
+    # TODO: check case that subjectList is path to a file.
 
-    if args.participant_label:
-        t_sub_list = []
-        for sub_dict in sub_list:
-            if sub_dict["participant_id"] in args.participant_label or \
-                            sub_dict["participant_id"].replace("sub-", "") in args.participant_label:
-                t_sub_list.append(sub_dict)
-
-        sub_list = t_sub_list
-
-        if not sub_list:
-            print ("Did not find data for {0} in {1}".format(", ".join(args.participant_label),
-                                                             args.data_config_file))
-            sys.exit(1)
+    # if args.participant_label:
+    #     t_sub_list = []
+    #     for sub_dict in data_config:
+    #         if sub_dict["participant_id"] in args.participant_label or \
+    #                         sub_dict["participant_id"].replace("sub-", "") in args.participant_label:
+    #             t_sub_list.append(sub_dict)
+    #
+    #     sub_list = t_sub_list
+    #
+    #     if not sub_list:
+    #         print ("Did not find data for {0} in {1}".format(", ".join(args.participant_label),
+    #                                                          args.data_config_file))
+    #         sys.exit(1)
 
 if args.participant_ndx:
-    if 0 <= int(args.participant_ndx) < len(sub_list):
+    if 0 <= int(args.participant_ndx) < len(data_config['subjectList']):
         # make sure to keep it a list
-        sub_list = [sub_list[int(args.participant_ndx)]]
+        data_config['subjectList'] = [data_config['subjectList'][args.participant_ndx]]
         data_config_file = "cpac_data_config_pt%s_%s.yml" % (args.participant_ndx, st)
     else:
         print ("Participant ndx {0} is out of bounds [0,{1})".format(int(args.participant_ndx),
-                                                                     len(sub_list)))
+                                                                     len(data_config['subjectList'])))
         sys.exit(1)
 else:
     # write out the data configuration file
@@ -295,7 +304,7 @@ else:
     data_config_file = os.path.join("/scratch", data_config_file)
 
 with open(data_config_file, 'w') as f:
-    yaml.dump(sub_list, f)
+    yaml.dump(data_config, f)
 
 if args.analysis_level == "participant":
     # build pipeline easy way

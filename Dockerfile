@@ -124,6 +124,7 @@ RUN pip install \
       patsy \
       psutil \
       prov \
+      git+https://github.com/INCF/pybids.git#egg=pybids \
       pygraphviz \
       simplejson
 
@@ -179,7 +180,7 @@ RUN cd /tmp && \
 COPY cpac_templates.tar.gz /cpac_resources/cpac_templates.tar.gz
 RUN tar xzvf /cpac_resources/cpac_templates.tar.gz && \
     rm -f /cpac_resources/cpac_templates.tar.gz
-    
+
 # install cpac
 RUN pip install git+https://github.com/jdkent/C-PAC.git@fix_pylock
 
