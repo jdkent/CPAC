@@ -4,6 +4,7 @@ import os
 import subprocess
 import yaml
 import sys
+from bids.grabbids import BIDSLayout
 
 import datetime
 import time
@@ -133,75 +134,75 @@ else:
 
 # otherwise, if we are running group, participant, or dry run we
 # begin by conforming the configuration
-c = yaml.load(open(os.path.realpath(args.pipeline_file), 'r'))
+pipeline_config = yaml.load(open(os.path.realpath(args.pipeline_file), 'r'))
 
 # set the parameters using the command line arguements
 # TODO: we will need to check that the directories exist, and
 # make them if they do not
-c['outputDirectory'] = os.path.join(args.output_dir, "output")
+pipeline_config['outputDirectory'] = os.path.join(args.output_dir, "output")
 
 if "s3://" not in args.output_dir.lower():
-    c['crashLogDirectory'] = os.path.join(args.output_dir, "crash")
-    c['logDirectory'] = os.path.join(args.output_dir, "log")
+    pipeline_config['crashLogDirectory'] = os.path.join(args.output_dir, "crash")
+    pipeline_config['logDirectory'] = os.path.join(args.output_dir, "log")
 else:
-    c['crashLogDirectory'] = os.path.join("/scratch", "crash")
-    c['logDirectory'] = os.path.join("/scratch", "log")
+    pipeline_config['crashLogDirectory'] = os.path.join("/scratch", "crash")
+    pipeline_config['logDirectory'] = os.path.join("/scratch", "log")
 
 if args.mem_gb:
-    c['maximumMemoryPerParticipant'] = float(args.mem_gb)
+    pipeline_config['maximumMemoryPerParticipant'] = float(args.mem_gb)
 elif args.mem_mb:
-    c['maximumMemoryPerParticipant'] = float(args.mem_mb) / 1024.0
+    pipeline_config['maximumMemoryPerParticipant'] = float(args.mem_mb) / 1024.0
 else:
-    c['maximumMemoryPerParticipant'] = 6.0
+    pipeline_config['maximumMemoryPerParticipant'] = 6.0
 
-c['maxCoresPerParticipant'] = int(args.n_cpus)
-c['numParticipantsAtOnce'] = 1
-c['num_ants_threads'] = min(int(args.n_cpus), int(c['num_ants_threads']))
+pipeline_config['maxCoresPerParticipant'] = int(args.n_cpus)
+pipeline_config['numParticipantsAtOnce'] = 1
+pipeline_config['num_ants_threads'] = min(int(args.n_cpus), int(pipeline_config['num_ants_threads']))
 
 if args.aws_input_creds:
     if os.path.isfile(args.aws_input_creds):
-        c['awsCredentialsFile'] = args.aws_input_creds
+        pipeline_config['awsCredentialsFile'] = args.aws_input_creds
     else:
         raise IOError("Could not find aws credentials {0}".format(args.aws_input_creds))
 
 if args.aws_output_creds:
     if os.path.isfile(args.aws_output_creds):
-        c['awsOutputBucketCredentials'] = args.aws_output_creds
+        pipeline_config['awsOutputBucketCredentials'] = args.aws_output_creds
     else:
         raise IOError("Could not find aws credentials {0}".format(args.aws_output_creds))
 
 if args.disable_file_logging is True:
-    c['disable_log'] = True
+    pipeline_config['disable_log'] = True
 else:
-    c['disable_log'] = False
+    pipeline_config['disable_log'] = False
 
 if args.save_working_dir is True:
     if "s3://" not in args.output_dir.lower():
-        c['removeWorkingDir'] = False
-        c['workingDirectory'] = os.path.join(args.output_dir, "working")
+        pipeline_config['removeWorkingDir'] = False
+        pipeline_config['workingDirectory'] = os.path.join(args.output_dir, "working")
     else:
         print ('Cannot write working directory to S3 bucket.'
                ' Either change the output directory to something'
                ' local or turn off the --removeWorkingDir flag')
 else:
-    c['removeWorkingDir'] = True
-    c['workingDirectory'] = os.path.join('/scratch', "working")
+    pipeline_config['removeWorkingDir'] = True
+    pipeline_config['workingDirectory'] = os.path.join('/scratch', "working")
 
 if args.participant_label:
     print ("#### Running C-PAC on {0}".format(args.participant_label))
 else:
     print ("#### Running C-PAC")
 
-print ("Number of participants to run in parallel: {0}".format(c['numParticipantsAtOnce']))
+print ("Number of participants to run in parallel: {0}".format(pipeline_config['numParticipantsAtOnce']))
 print ("Input directory: {0}".format(args.bids_dir))
-print ("Output directory: {0}".format(c['outputDirectory']))
-print ("Working directory: {0}".format(c['workingDirectory']))
-print ("Crash directory: {0}".format(c['crashLogDirectory']))
-print ("Log directory: {0}".format(c['logDirectory']))
-print ("Remove working directory: {0}".format(c['removeWorkingDir']))
-print ("Available memory: {0} (GB)".format(c['maximumMemoryPerParticipant']))
-print ("Available threads: {0}".format(c['maxCoresPerParticipant']))
-print ("Number of threads for ANTs: {0}".format(c['num_ants_threads']))
+print ("Output directory: {0}".format(pipeline_config['outputDirectory']))
+print ("Working directory: {0}".format(pipeline_config['workingDirectory']))
+print ("Crash directory: {0}".format(pipeline_config['crashLogDirectory']))
+print ("Log directory: {0}".format(pipeline_config['logDirectory']))
+print ("Remove working directory: {0}".format(pipeline_config['removeWorkingDir']))
+print ("Available memory: {0} (GB)".format(pipeline_config['maximumMemoryPerParticipant']))
+print ("Available threads: {0}".format(pipeline_config['maxCoresPerParticipant']))
+print ("Number of threads for ANTs: {0}".format(pipeline_config['num_ants_threads']))
 
 # create a timestamp for writing config files
 ts = time.time()
@@ -214,7 +215,7 @@ else:
     config_file = os.path.join("/scratch", "cpac_pipeline_config_{0}.yml".format(st))
 
 with open(config_file, 'w') as f:
-    yaml.dump(c, f)
+    yaml.dump(pipeline_config, f)
 
 # we have all we need if we are doing a group level analysis
 if args.analysis_level == "group":
@@ -301,8 +302,8 @@ if args.analysis_level == "participant":
     import CPAC
     from nipype.pipeline.plugins.callback_log import log_nodes_cb
 
-    plugin_args = {'n_procs': int(c['maxCoresPerParticipant']),
-                   'memory_gb': int(c['maximumMemoryPerParticipant']),
+    plugin_args = {'n_procs': int(pipeline_config['maxCoresPerParticipant']),
+                   'memory_gb': int(pipeline_config['maximumMemoryPerParticipant']),
                    'callback_log': log_nodes_cb}
 
     print ("Starting participant level processing")
