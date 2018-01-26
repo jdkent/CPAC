@@ -232,10 +232,10 @@ if not args.data_config_file:
     # from bids_utils import collect_bids_files_configs, bids_gen_cpac_sublist
     layout = BIDSLayout(args.bids_dir)
     data_config = {
-                    dataFormat: ['BIDS'],
-                    bidsBaseDir: args.bids_dir,
-                    outputSubjectListLocation: args.output_dir,
-                    subjectListName: ['bids_sublist'],
+                    'dataFormat': ['BIDS'],
+                    'bidsBaseDir': args.bids_dir,
+                    'outputSubjectListLocation': args.output_dir,
+                    'subjectListName': ['bids_sublist'],
                   }
     if args.aws_input_creds:
         data_config.update({'awsCredentialsFile': args.aws_input_creds})
